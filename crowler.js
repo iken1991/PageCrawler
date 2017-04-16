@@ -5,16 +5,6 @@ var trim = function(str){
 	return !!str? str.replace(/^\s+|\s+$/g, ''): '';
 };
 
-var filterSource = function(html){
-	var $ = cheerio.load(html);
-
-	var articles = $('.item');
-	articles.each(function(index, ele){
-		var url = $(ele).find('dl>dt>a');
-		console.log(title);
-	});
-};
-
 var fetchDomsFromHtml = function(html, target, attribute){
 	var doms = [], dom = '';
 
@@ -26,6 +16,19 @@ var fetchDomsFromHtml = function(html, target, attribute){
 	});
 
 	return doms;
+};
+
+var fetchArticles = function(html, target){
+	var articls = [], article = '';
+
+	var $ = cheerio.load(html);
+	article = trim($(target).text());
+
+	if(!!article){
+		article = '<div>' + article.replace(/\r\n/g, '<br>') + '</div>';
+		return article;
+	}
+	return '';
 };
 
 var getHtml = function(url, callback){
@@ -40,7 +43,7 @@ var getHtml = function(url, callback){
 			!!callback && callback(html);
 		});
 	}).on('error', function(){
-		console.log('http error');
+		console.log('http get error');
 	});
 };
 
@@ -49,14 +52,28 @@ var init = function(){
 		{ url: 'http://www.cnbeta.com', target: 'dl>dt>a', attribute: 'href'}
 	];
 
-	var res = [];
+	var articles = [];
 	
 	for(var pageIndex = 0, page; page = destPages[pageIndex]; pageIndex++){
 		getHtml(page.url, (function(target, attribute){
 			var _target = target, _attribute = attribute;
 			return function(html){
 				var urls = fetchDomsFromHtml(html, _target, _attribute);
-				console.log(JSON.stringify(urls));
+
+				for(var urlIndex = 0, articleUrl; articleUrl = urls[urlIndex]; urlIndex++){
+					getHtml(articleUrl, (function(target, urlIndex){
+						var _target = target, _urlIndex = urlIndex;
+						return function(html){
+							var article = fetchArticles(html, _target);
+							if(!!article){
+								articles.push({
+									'id': _urlIndex,
+									'content': article
+								});
+							}
+						}
+					})('.cnbeta-article', urlIndex));
+				}
 			};
 		})(page.target, page.attribute));
 	}
