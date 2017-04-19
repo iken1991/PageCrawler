@@ -1,82 +1,83 @@
 var http = require('http');
 var cheerio = require('cheerio');
+var util = require('./util');
+var config = require('./config');
 
-var trim = function(str){
-	return !!str? str.replace(/^\s+|\s+$/g, ''): '';
-};
-
-var fetchDomsFromHtml = function(html, target, attribute){
-	var doms = [], dom = '';
-
+var fetchTopicUrlList = function(html, website){
 	var $ = cheerio.load(html);
-	$(target).each(function(index, ele){
-		dom = !!attribute? $(ele).attr(attribute): $(ele);
-		index === 1 && console.log($(ele).attr);
-		!!trim(dom) && doms.push(dom);
-	});
+	var urlList = [];
 
-	return doms;
-};
-
-var fetchArticles = function(html, target){
-	var articls = [], article = '';
-
-	var $ = cheerio.load(html);
-	article = trim($(target).text());
-
-	if(!!article){
-		article = '<div>' + article.replace(/\r\n/g, '<br>') + '</div>';
-		return article;
+	if(website.isAbs){
+		$(website.target).each(function(index, ele){
+			urlList.push($(ele).attr(website.targetAttribute))
+		});
+	}else{
+		var url = '';
+		$(website.target).each(function(index, ele){
+			url = util.trim($(ele).attr(website.targetAttribute));
+			!!url && urlList.push(website.website + url);
+		});
 	}
-	return '';
+
+	return urlList;
 };
+
+var fetchTopic = function(html, topicRule){
+	var $ = cheerio.load(html);
+	var topic = {};
+
+	topic.title = util.trim($(topicRule.title).text());
+	topic.tag = util.trimAll($(topicRule.tag).text());
+	topic.content = $(topicRule.content).html();
+
+	topic.moduleId = topicRule.moduleId;
+	topic.channelId = topicRule.channelId;
+
+	return topic;
+};
+
 
 var getHtml = function(url, callback){
-	var html;
+	var html = '';
 
 	http.get(url, function(res){
 		res.on('data', function(data){
 			html += data;
-		});
-
-		res.on('end', function(){
+		}).on('end', function(){
 			!!callback && callback(html);
 		});
-	}).on('error', function(){
-		console.log('http get error');
+	}).on('error', function(e){
+		console.log('Url get error:', url);
+		console.log(e);
 	});
 };
 
-var init = function(){
-	var destPages = [
-		{ url: 'http://www.cnbeta.com', target: 'dl>dt>a', attribute: 'href'}
-	];
-
+var run = function(){
 	var articles = [];
 	
-	for(var pageIndex = 0, page; page = destPages[pageIndex]; pageIndex++){
-		getHtml(page.url, (function(target, attribute){
-			var _target = target, _attribute = attribute;
+	for(var websiteIndex = 0, website; website = config[websiteIndex]; websiteIndex++){
+		getHtml(website.listUrl, (function(website){
 			return function(html){
-				var urls = fetchDomsFromHtml(html, _target, _attribute);
+				var urls = fetchTopicUrlList(html, website);
 
-				for(var urlIndex = 0, articleUrl; articleUrl = urls[urlIndex]; urlIndex++){
-					getHtml(articleUrl, (function(target, urlIndex){
-						var _target = target, _urlIndex = urlIndex;
+				for(var urlIndex = 0, pageUrl; pageUrl = urls[urlIndex]; urlIndex++){
+					getHtml(pageUrl, function(website){
 						return function(html){
-							var article = fetchArticles(html, _target);
-							if(!!article){
-								articles.push({
-									'id': _urlIndex,
-									'content': article
-								});
+							var topic = fetchTopic(html, website.topicRule);
+							if(!util.isEmptyObject(topic)){
+								var data = '<html><head><meta charset="utf-8"></head><body><h2>'
+									+ topic.title + '</h2><p>'
+									+ topic.content + '</p></body></html>';
+								util.writeFile(topic.title + '.html', data);
 							}
-						}
-					})('.cnbeta-article', urlIndex));
+						};
+					}(website));
 				}
 			};
-		})(page.target, page.attribute));
+		})(website));
 	}
 };
 
-init();
+module.exports = exports = {
+	run: run
+};
