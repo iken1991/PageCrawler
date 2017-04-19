@@ -3,9 +3,7 @@
 Aim at crawl specific web page content efficiently
 
 ### Vender
-nodejs with express, http, cheerio module
-
-other codes like html/css, javascript, jQuery
+nodejs with cheerio and http module
 
 ## Copyright
-This project is free, but you should take care when you use its codes.
+All code in this project is free. Welcome to use or join the project.
